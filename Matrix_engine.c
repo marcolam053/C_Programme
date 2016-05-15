@@ -160,8 +160,6 @@ float* uniform_matrix(float value) {
 	float* result = new_matrix();
 
 	/*
-		TODO
-
 		     1 1
 		1 => 1 1
 	*/
@@ -224,11 +222,7 @@ float* sorted(const float* matrix) {
 	*/
 
 	// clone matrix to result
-	for(int y = 0; y < g_height; y++){
-		for(int x = 0; x < g_width; x++){
-			result[y*g_width+x] = matrix[y*g_width+x];
-		}
-	}
+	for(int i = 0; i < g_elements; i++) result[i] = matrix[i];
 
 	for(int i = 0; i < g_elements;i++){
 		for(int j = 0; j < g_elements-i-1;j++){
@@ -250,19 +244,21 @@ float* rotated(const float* matrix) {
 
 	float* result = new_matrix();
 	/*
+	TODO
 		1 2    3 1
 		3 4 => 4 2
 	*/
 
-	// clone matrix to result
-	result = cloned(matrix);
-
-	// rotate the matrix
+	// Rotate the matrix in 90 degrees
+	for(int x = 0; x < g_width; x++){
+		for(int y = 0; y < g_height; y++){
+			 result[x*g_height+y] = matrix[(g_height-1-y)*g_width+x];
+		}
+	}
 
 
 	return result;
 }
-
 /**
  * Returns new matrix with elements ordered in reverse.
  */
@@ -275,17 +271,9 @@ float* reversed(const float* matrix) {
 		3 4 => 2 1
 	*/
 
-	// clone matrix to result
-	result = cloned(matrix);
-
-	// Transpose the matrix
-	result = transposed(matrix);
-	// shift the elements where x = y
-	for(int y = 0; y < g_height; y++){
-		for(int x = 0; x < g_width; x++){
-			if(x == y)
-				result[y*g_width+x]= matrix[y*g_width+x];
-		}
+	// reverse the array
+	for(int i = 0; i < g_elements;i++){
+		result[i] = matrix[g_elements-i-1];
 	}
 
 	return result;
@@ -302,6 +290,7 @@ float* transposed(const float* matrix) {
 		1 2    1 3
 		3 4 => 2 4
 	*/
+
 	// Transpose the matrix
 	for(int y = 0; y < g_height;y++){
 		for(int x = 0; x < g_width; x++){
@@ -395,7 +384,6 @@ float* matrix_add(const float* matrix_a, const float* matrix_b) {
 float* matrix_mul(const float* matrix_a, const float* matrix_b) {
 
 	float* result = new_matrix();
-
 	/*
 		1 2   1 0    1 2
 		3 4 x 0 1 => 3 4
@@ -424,6 +412,7 @@ float* matrix_pow(const float* matrix, int exponent) {
 	float* result = new_matrix();
 
 	/*
+		TODO
 		1 2        1 0
 		3 4 ^ 0 => 0 1
 
@@ -434,32 +423,205 @@ float* matrix_pow(const float* matrix, int exponent) {
 		3 4 ^ 4 => 435 634
 	*/
 
-	// Return Identity matrix when exponent = 0
-	if(exponent == 0) result = identity_matrix();
+	if(exponent == 0){
+		for(int y = 0; y < g_height;y++){
+			for(int x = 0; x < g_width;x++){
+				if(y == x){
+					// insert 1 into slot where x = y to for indentity matrix.
+					result[y * g_width + x] = 1;
+				}
+			}
+		}
+	}
 
-	// If exponent > 0, Do Following
-
-
-
+	else{
+		//Cloned value to matrix_b
+		for(int i = 0; i < g_elements; i++) result[i] = matrix[i];
+		// multiply by n times
+		float* temp;
+		for(int num = 0; num < exponent - 1; num++){
+			temp = matrix_mul(result,matrix);
+			free(result);
+			result = cloned(temp);
+			free(temp);
+	}
+	}
 
 	return result;
 }
 
-/**
+/* //////////////////////////////
+  //  CONVOLUTION OF MATRIX   //
+ //////////////////////////////
+ */
+
+ /* ---------------------------------------
+    |   Method for extending the matrix   |
+		|   - bottom & top,Row & Column       |
+		|   - side and Vertex                 |
+		---------------------------------------
+*/
+
+float* extend_row(const float* matrix, int p, float*side){
+		side[0] = matrix[p-g_width-1];
+		side[1] = matrix[p-g_width];
+		side[2] = matrix[p-g_width];
+		side[3] = matrix[p-1];
+		side[4] = matrix[p];
+		side[5] = matrix[p];
+		side[6] = matrix[p + g_width-1];
+		side[7] = matrix[p + g_width];
+		side[8] = matrix[p + g_width];
+	return side;
+}
+float* extend_col(const float* matrix, int pt, float* side){
+		side[0] = matrix[pt-g_width];
+		side[1] = matrix[pt-g_width];
+		side[2] = matrix[pt-g_width+1];
+		side[3] = matrix[pt];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt + g_width];
+		side[7] = matrix[pt + g_width];
+		side[8] = matrix[pt + g_width+1];
+	return side;
+}
+float* extend_top(const float* matrix, int pt, float* side){
+		side[0] = matrix[pt-1];
+		side[1] = matrix[pt];
+		side[2] = matrix[pt+1];
+		side[3] = matrix[pt-1];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt + g_width-1];
+		side[7] = matrix[pt + g_width];
+		side[8] = matrix[pt + g_width+1];
+	return side;
+}
+float* extend_bottom(const float* matrix, int pt, float* side){
+		side[0] = matrix[pt-g_width-1];
+		side[1] = matrix[pt-g_width];
+		side[2] = matrix[pt-g_width+1];
+		side[3] = matrix[pt-1];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt-1];
+		side[7] = matrix[pt];
+		side[8] = matrix[pt+1];
+	return side;
+}
+float* extend_middle(const float* matrix, int pt, float* side){
+		side[0] = matrix[pt-g_width-1];
+		side[1] = matrix[pt-g_width];
+		side[2] = matrix[pt-g_width+1];
+		side[3] = matrix[pt-1];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt+g_width-1];
+		side[7] = matrix[pt+g_width];
+		side[8] = matrix[pt+g_width+1];
+	return side;
+}
+float* extend_vertex(const float* matrix, int pt, float* side){
+	if(pt == 0){
+		side[0] = matrix[pt];
+		side[1] = matrix[pt];
+		side[2] = matrix[pt+1];
+		side[3] = matrix[pt];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt + g_width];
+		side[7] = matrix[pt + g_width];
+		side[8] = matrix[pt + g_width+1];
+	}
+	if(pt == g_width - 1) {
+		side[0] = matrix[pt - 1];
+		side[1] = matrix[pt];
+		side[2] = matrix[pt];
+		side[3] = matrix[pt - 1];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt];
+		side[6] = matrix[pt+g_width-1];
+		side[7] = matrix[pt+g_width];
+		side[8] = matrix[pt+g_width];
+	}
+	if(pt == g_elements - g_width) {
+		side[0] = matrix[pt-g_width];
+		side[1] = matrix[pt-g_width];
+		side[2] = matrix[pt-g_width+1];
+		side[3] = matrix[pt];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt+1];
+		side[6] = matrix[pt];
+		side[7] = matrix[pt];
+		side[8] = matrix[pt+1];
+	}
+	if(pt == g_elements - 1) {
+		side[0] = matrix[pt-g_width-1];
+		side[1] = matrix[pt-g_width];
+		side[2] = matrix[pt-g_width];
+		side[3] = matrix[pt-1];
+		side[4] = matrix[pt];
+		side[5] = matrix[pt];
+		side[6] = matrix[pt-1];
+		side[7] = matrix[pt];
+		side[8] = matrix[pt];
+	}
+	return side;
+}
+/*
  * Returns new matrix that is the result of
  * convolving given matrix with a 3x3 kernel matrix.
  */
 float* matrix_conv(const float* matrix, const float* kernel) {
 
 	float* result = new_matrix();
-
 	/*
 		Convolution is the process in which the values of a matrix are
 		computed according to the weighted sum of each value and it's
 		neighbours, where the weights are given by the kernel matrix.
 	*/
 
+	// Convolution Start
+	float* conv = calloc(9,sizeof(float));
 
+	if (g_width == 1){
+		for(size_t i = 0; i < 9; i++){
+			result[0]+=kernel[i]*matrix[0];
+		}
+		return result;
+	}
+	if (g_width == 2){
+		for(size_t i = 0; i < g_elements; i++){
+			conv = extend_vertex(matrix, i, conv);
+			for(size_t j = 0; j < 9; j++){
+				result[i]+=kernel[j]*conv[j];
+			}
+		}
+		return result;
+	}
+	if (g_width >= 3) {
+		for(size_t i = 0; i < g_elements; i++) {
+			if(i == 0 || i == g_width - 1 || i == g_elements - g_width || i == g_elements - 1) {
+				conv = extend_vertex(matrix, i, conv);
+			} else if (i%g_width == 0) {
+				conv = extend_col(matrix, i, conv);
+			} else if (i < g_width) {
+				conv = extend_top(matrix, i, conv);
+			} else if (i > g_elements-g_width) {
+				conv = extend_bottom(matrix, i, conv);
+			} else if (i%g_width == g_width-1) {
+				conv = extend_row(matrix, i, conv);
+			} else {
+				conv = extend_middle(matrix, i, conv);
+			}
+			for(size_t j = 0; j < 9; j++){
+				result[i]+=kernel[j]*conv[j];
+			}
+		}
+	}
+	// Free Memory before finishing programme
+	free(conv);
 	return result;
 }
 
@@ -566,6 +728,50 @@ float get_maximum(const float* matrix) {
 	return largest;
 }
 
+// Method for calculating determinant for the matrix
+float determinant(const float* matrix,ssize_t n){
+
+  if(n == 1){ // 1D matrix
+ 		return matrix[0];
+ 	}
+  else if (n == 2){ // 2D matrix
+ 		float det = matrix[0]*matrix[3]-matrix[1]*matrix[2];
+    return det;
+  }
+
+ 	float** m = malloc(n*sizeof(float*));
+ 	float det = 0.00;
+
+  // FOR 3D or above Matrix
+  for (int i1 = 0;i1 < n;i1++){
+ 		//create a reflect of i column of matrix
+ 		m[i1] = malloc(pow((g_elements-1),2)*sizeof(float));
+ 		// Populate the matrices of i column
+ 		for (int j = 1;j<n;j++){
+ 			for(int i2 = 0; i2 < n; i2++){
+ 				if (i1 > i2){
+ 					*(m[i1]+(j-1)*(n-1)+i2) = *(matrix+j*n+i2);
+ 					continue;
+ 				}
+ 				if (i2 > i1){
+ 					*(m[i1]+(j-1)*(n-1)+i2-1) = *(matrix+j*n+i2);
+ 				}
+ 			}
+ 		}
+
+ 		// Calculate the determinant
+ 		det = det + pow(-1,i1)*matrix[i1]* determinant(m[i1],n-1);
+ 	}
+
+	// Release memory
+	for(int i = 0; i < n; i++){
+		free(m[i]);
+	}
+
+	free(m);
+ 	return det;
+}
+
 /**
  * Returns the determinant of the matrix.
  */
@@ -583,7 +789,12 @@ float get_determinant(const float* matrix) {
 		2 0 8 => 240
 	*/
 
-	return 0;
+	float det = 0.00;
+
+	// Call Function 'determinant' and return result
+	det = determinant(matrix,g_height);
+
+	return det;
 }
 
 /**
